@@ -1,3 +1,8 @@
+/* Usage:
+   ./MRF --output_dir directoryname/ --input_file filename --actual_file \
+   filename [--num_trees ##] [--update_feature_dist] [--log_after_every_tree]
+*/
+
 #include <vector>
 #include <math.h>
 #include <time.h>
@@ -13,6 +18,7 @@
 #include <functional>
 #include <numeric>
 #include <list>
+#include <string>
 #include <reducer_max.h>
 
 #include "MRF.h"
@@ -23,10 +29,12 @@
 MRF::MRF(vector<vector<float>* >* inputs,
          vector<bool>* discrete,
          vector<vector<float>* >* outputs,
+         char* output_dir,
+         bool log=false,
+         int num_ensembles=1000,
          bool update=false,
          int iterations=10,
          int number_to_destroy=1,
-         int num_ensembles=1000,
          int mtry=0,
          int min_terminal_size=20) {
   this->num_ensembles = num_ensembles;
@@ -77,33 +85,31 @@ MRF::MRF(vector<vector<float>* >* inputs,
     }
     reorder_input_variables();
   }
-  if (update) {
-    for (int i = 0; i < iterations; i++) {
-      // cout << "Feature distribution: ";
-      // print_float_vector(feature_distribution);
-      printf("Generating forest for iteration %d\n", i);
-      generate_forest();
-      // if (i != 0)
-      //   destroy_worst_trees();
+  for (int i = 0; i < num_ensembles; i++) {
+    // cout << "Feature distribution: ";
+    // print_float_vector(feature_distribution);
+    generate_tree();
+    // if (i != 0)
+    //   destroy_worst_trees();
+    if (log) {
       stringstream out;
       out << i;
       string iteration = out.str();
       determine_predictions_errors();
-      string predict_filename = "predict_" + iteration + ".txt";
-      string mse_filename = "MSE_" + iteration + ".txt";
-      write_predictions_errors(predict_filename.c_str(), mse_filename.c_str());
+      string out_str(output_dir);
+      string predict_filename = out_str+"predict_"+iteration+".txt";
+      string mse_filename = out_str+"MSE_" +iteration+".txt";
+      cout << predict_filename << endl;
+      cout << mse_filename << endl;
+      write_predictions_errors(predict_filename.c_str(),
+                               mse_filename.c_str());
       cout << "Wrote predictions and errors" << endl;
-      // string feature_filename = "feature_dist_" + iteration + ".txt";
-      // write_feature_distribution(feature_filename.c_str());
-      // cout << "Wrote feature distribution" << endl;
-      // update_feature_distribution();
-      // cout << "Updated feature distribution" << endl;
     }
-  } else {
-    fprintf(stdout,
-            "Generating forest with %d inputs, %d input vars, %d output vars\n",
-            num_inputs, num_input_vars, num_output_vars);
-    generate_forest();
+    // string feature_filename = "feature_dist_" + iteration + ".txt";
+    // write_feature_distribution(feature_filename.c_str());
+    // cout << "Wrote feature distribution" << endl;
+    // update_feature_distribution();
+    // cout << "Updated feature distribution" << endl;
   }
   cout << "Generated forest" << endl;
   determine_predictions_errors();
@@ -151,42 +157,36 @@ void MRF::normalize_output() {
   }
 }
 
-void MRF::generate_forest() {
+void MRF::generate_tree() {
   // create subsets of the input with replacement, each in its own root node
-  for (int i = 0; i < num_ensembles; i++) {
-    Node* root = new Node;
-    vector<bool> used(num_inputs, false);
-    for (int j = 0; j < num_inputs; j++) {
-      int index = rand() % num_inputs;
-      if (!(used[index])) {
-        used[index] = true;
-        root->inputs.push_back(all_inputs->at(index));
-        root->outputs.push_back(all_outputs.at(index));
-      }
+  Node* root = new Node;
+  vector<bool> used(num_inputs, false);
+  for (int j = 0; j < num_inputs; j++) {
+    int index = rand() % num_inputs;
+    if (!(used[index])) {
+      used[index] = true;
+      root->inputs.push_back(all_inputs->at(index));
+      root->outputs.push_back(all_outputs.at(index));
     }
-    
-    // determine the inputs that are OOB for this tree
-    vector<int>* OOB_tree = new vector<int>;
-    for (int j = 0; j < num_inputs; j++) {
-      if (!(used[j])) {
-        OOB_tree->push_back(j);
-      }
-    }
-    OOB.push_back(OOB_tree);
-    // printf("Ensemble %d: %d inputs OOB\n", i, count);
-    roots.push_back(root);
   }
+    
+  // determine the inputs that are OOB for this tree
+  vector<int>* OOB_tree = new vector<int>;
+  for (int j = 0; j < num_inputs; j++) {
+    if (!(used[j])) {
+      OOB_tree->push_back(j);
+    }
+  }
+  OOB.push_back(OOB_tree);
+  // printf("Ensemble %d: %d inputs OOB\n", i, count);
+  roots.push_back(root);
 
   time_t start, end;
   time(&start);
-  int first = roots.size() - num_ensembles;
-  cilk_for (int i = first; i < first + num_ensembles; i++) {
-    create_tree(roots.at(i));
-    cout << "Created tree " << i << endl;
-  }
+  create_tree(roots.at(roots.size()-1));
+  cout << "Created tree " << roots.size() << endl;
   time(&end);
-  printf("%.2lf seconds taken to create trees\n", difftime(end, start));
-  cout << "Done creating trees" << endl;
+  printf("%.2lf seconds taken to create tree\n", difftime(end, start));
 }
 
 void MRF::destroy_worst_trees() {
@@ -743,26 +743,74 @@ void MRF::print_float_vector(vector<float>& vec) {
 }
 
 int cilk_main(int argc, char** argv) {
+  const char* input_file;
+  char* output_dir;
+  const char* actual_file;
+  bool update_feature_dist = false;
+  bool log_after_every_tree = false;
+  int num_trees = 1000;
+  for (int i = 1; i < argc; i++) {
+    if (i+1 != argc) {
+      if (strcmp(argv[i], "--output_dir") == 0) {
+        output_dir = argv[i+1];
+        if (output_dir[strlen(argv[i+1])-1] != '/') {
+          output_dir = strcat(argv[i+1], "/");
+        } else {
+          output_dir = argv[i+1];
+        }
+        i++;
+      } else if (strcmp(argv[i], "--input_file") == 0) {
+        input_file = argv[i+1];
+        i++;
+      } else if (strcmp(argv[i], "--actual_file") == 0) {
+        actual_file = argv[i+1];
+        i++;
+      } else if (strcmp(argv[i], "--num_trees") == 0) {
+        num_trees = atoi(argv[i+1]);
+        i++;
+      } else {
+        cout << "Invalid arguments\n" << endl;
+      }
+    }
+    if (strcmp(argv[i], "--update_feature_dist") == 0) {
+      update_feature_dist = true;
+    } else if (strcmp(argv[i], "--log_after_every_tree") == 0) {
+      log_after_every_tree = true;
+    }
+  }
   vector<vector<float>* > all_inputs;
   vector<bool> discrete;
-  cout << "Reading input data" << endl;
-  MRF::read_data("motifs_beer.txt", all_inputs, &discrete);
-  cout << "Read input data" << endl;
+  cout << "Reading input data: " << input_file << endl;
+  MRF::read_data(input_file, all_inputs, &discrete);
   vector<vector<float>* > all_outputs;
-  MRF::read_data("expr_beer.txt", all_outputs, NULL);
-  cout << "Read output data" << endl;
+  cout << "Reading actual data: " << actual_file << endl;
+  MRF::read_data(actual_file, all_outputs, NULL);
   // all_inputs.resize(1000); all_outputs.resize(1000);
   // update, iterations, number_to_destroy, num_ensembles, mtry, min_terminal_size
-  MRF mrf(&all_inputs, &discrete, &all_outputs, true, 50, 20, 1, 20, 100);
-  mrf.write_predictions_errors("predicted_up_down.txt", 
-                               "MSE.txt",
-                               "predicted_up_down_norm.txt",
-                               "MSE_norm.txt");
-  cout << "Wrote predictions and MSEs" << endl;
-  mrf.print_trees("trees.txt");
-  cout << "Wrote trees" << endl;
-  mrf.print_OOB("OOB.txt");
-  cout << "Wrote OOB" << endl;
-  mrf.write_feature_distribution("feature_dist.txt");
-  cout << "Wrote features" << endl;
+  MRF mrf(&all_inputs,
+          &discrete,
+          &all_outputs,
+          output_dir,
+          log_after_every_tree,
+          num_trees, 
+          update_feature_dist,
+          1,
+          1,
+          20,
+          20);
+  cout << "Writing predictions, MSEs, trees in " << output_dir << endl;
+  string out_str(output_dir);
+  string predicted_file = out_str + "predicted.txt";
+  string MSE_file = out_str + "MSE.txt";
+  string predicted_norm_file = out_str + "predicted_norm.txt";
+  string MSE_norm_file = out_str + "MSE_norm.txt";
+  string trees_file = out_str + "trees.txt";
+  string OOB_file = out_str + "OOB.txt";
+  mrf.write_predictions_errors(predicted_file.c_str(),
+                               MSE_file.c_str(),
+                               predicted_norm_file.c_str(),
+                               MSE_norm_file.c_str());
+  mrf.print_trees(trees_file.c_str());
+  mrf.print_OOB(OOB_file.c_str());
+  // mrf.write_feature_distribution("feature_dist.txt");
 }

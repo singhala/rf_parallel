@@ -75,7 +75,7 @@ class MRF {
     float get_node_impurity(Node* node);
     void split_node(Node* node, int var_index, float var_value, Node* child1,
                     Node* child2);
-    void generate_forest();
+    void generate_tree();
     static void tokenize(string line, vector<string>& tokens);
     void print_node(ofstream& file, Node* node, bool left, int level,
                    int split_index, float split_value);
@@ -99,10 +99,12 @@ class MRF {
     MRF(vector<vector<float>* >* all_inputs,
         vector<bool>* discrete,
         vector<vector<float>* >* all_outputs,
+        char* output_dir,
+        bool log,
+        int num_ensembles,
         bool update,
         int iterations,
         int number_to_destroy,
-        int num_ensembles,
         int mtry,
         int min_terminal_size);
     ~MRF();
