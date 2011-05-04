@@ -3,6 +3,7 @@
    filename [--num_trees ##] [--log_after_every_tree]
 */
 
+// #include <Python.h>
 #include <vector>
 #include <math.h>
 #include <time.h>
@@ -73,7 +74,12 @@ MRF::MRF(vector<vector<float>* >* inputs,
   determine_variable_stats(all_outputs_unnorm, output_means, output_devs);
   determine_variable_stats(all_inputs, input_means, input_devs);
   normalize_output();
-
+  
+  for (int i = 0; i < num_input_vars; i++) {
+    vector<int>* OOB_trees = new vector<int>;
+    OOB_trees_for_inputs.push_back(OOB_trees);
+  }
+  
   fprintf(stdout,
           "Generating forest with %d inputs, %d input vars, %d output vars\n",
           num_inputs, num_input_vars, num_output_vars);
@@ -106,7 +112,10 @@ MRF::~MRF() {
     delete *it;
   }
   vector<vector<int>* >::iterator it3;
-  for (it3 = OOB.begin(); it3 != OOB.end(); it3++) {
+  for (it3 = OOB_inputs_for_trees.begin(); it3 != OOB_inputs_for_trees.end(); it3++) {
+    delete *it3;
+  }
+  for (it3 = OOB_trees_for_inputs.begin(); it3 != OOB_trees_for_inputs.end(); it3++) {
     delete *it3;
   }
   vector<vector<float>* >::iterator it2;
@@ -147,22 +156,20 @@ void MRF::generate_tree() {
   vector<bool> used_here(num_inputs, false);
   for (int j = 0; j < num_inputs; j++) {
     int index = rand() % num_inputs;
-    if (!(used_here[index])) {
-      used_here[index] = true;
-      // used[index] = true;
-      root->inputs.push_back(all_inputs->at(index));
-      root->outputs.push_back(all_outputs.at(index));
-    }
+    used_here[index] = true;
+    root->inputs.push_back(all_inputs->at(index));
+    root->outputs.push_back(all_outputs.at(index));
   }
-    
+   
   // determine the inputs that are OOB for this tree
-  vector<int>* OOB_tree = new vector<int>;
+  int tree_index = OOB.inputs_for_tree.size();
+  vector<int>* OOB_inputs = new vector<int>;
   for (int j = 0; j < num_inputs; j++) {
-    if (!(used[j])) {
-      OOB_tree->push_back(j);
+    if (!(used_here[j])) {
+      OOB_inputs->push_back(j);
     }
   }
-  OOB.push_back(OOB_tree);
+  OOB_inputs_for_tree.push_back(OOB_inputs);
   // printf("Ensemble %d: %d inputs OOB\n", i, count);
   roots.push_back(root);
 
@@ -423,10 +430,10 @@ void MRF::determine_predictions() {
   predictions.clear();
   for (int i = 0; i < num_inputs; i++) {
     vector<float>* output = NULL;
-    if (!used[i]) {
-      output = new vector<float>(num_output_vars, 0);
-      output_estimate(all_inputs->at(i), output, roots);
-    }
+    vector<float> trees;
+    vector<float>::iterator it;
+    output = new vector<float>(num_output_vars, 0);
+    output_estimate(all_inputs->at(i), output, roots);
     predictions.push_back(output);
   }
 }
@@ -676,6 +683,18 @@ void MRF::print_float_vector(vector<float>& vec) {
   }
   cout << endl;
 }
+
+/*static PyObject* MRF_test(PyObject* self, PyObject* args) {
+  const int* start;
+  
+  if (!PyArg_ParseTuple(args, "i", &start)) {
+    return NULL;
+  }
+  cilk_for (int i = 0; i < 10; i++) {
+  }
+
+  return Py_BuildValue("i", sts);
+}*/
 
 int cilk_main(int argc, char** argv) {
   const char* input_file;

@@ -65,18 +65,16 @@ class MRF {
     vector<float> output_means;
     vector<float> output_devs;
     vector<Node*> roots;
-    vector<vector<int>* > OOB;
-    vector<bool> used;
+    vector<vector<int>* > OOB_inputs_for_tree;
+    vector<vector<int>* > OOB_trees_for_inputs;
     vector<vector<float>* > predictions;
     vector<float> prediction_errors;
-    vector<float> feature_distribution;
-    vector<int> ordering;
 
     void create_tree(Node* root);
     float get_node_impurity(Node* node);
     void split_node(Node* node, int var_index, float var_value, Node* child1,
                     Node* child2);
-    void generate_tree();
+    void generate_tree(int tree_index);
     static void tokenize(string line, vector<string>& tokens);
     void print_node(ofstream& file, Node* node, bool left, int level,
                    int split_index, float split_value);
@@ -123,6 +121,7 @@ class MRF {
     float calculate_mean(vector<float>& values);
     float calculate_standard_deviation(vector<float>& values);
     void calculate_tree_errors(vector<float>& tree_errors);
+    // static PyObject* MRF_test(PyObject* self, PyObject* args);
 };
 
 #endif /* MRF_H */

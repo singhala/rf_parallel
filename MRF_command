@@ -1,1 +1,1 @@
-./MRF --output_dir test_car/output/ --input_file test_car/cars_input.txt --actual_file test_car/cars_output.txt --log_after_every_tree --num_trees 1000
+./MRF --output_dir test_car/output/ --input_file test_car/cars_input.txt --actual_file test_car/cars_output.txt --log_after_every_tree --num_trees 50
