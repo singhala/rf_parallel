@@ -1,6 +1,6 @@
 /* Usage:
    ./MRF --output_dir directoryname/ --input_file filename --actual_file \
-   filename [--num_trees ##] [--update_feature_dist] [--log_after_every_tree]
+   filename [--num_trees ##] [--log_after_every_tree]
 */
 
 #include <vector>
@@ -32,11 +32,8 @@ MRF::MRF(vector<vector<float>* >* inputs,
          char* output_dir,
          bool log=false,
          int num_ensembles=1000,
-         bool update=false,
-         int iterations=10,
-         int number_to_destroy=1,
          int mtry=0,
-         int min_terminal_size=20) {
+         int min_terminal_size=5) {
   this->num_ensembles = num_ensembles;
   this->min_terminal_size = min_terminal_size;
   this->all_inputs = inputs;
@@ -45,14 +42,17 @@ MRF::MRF(vector<vector<float>* >* inputs,
   this->num_inputs = all_inputs->size();
   this->num_input_vars = all_inputs->at(0)->size();
   this->num_output_vars = all_outputs_unnorm->at(0)->size();
-  this->update = update;
-  this->number_to_destroy = number_to_destroy;
-  
+
   if (mtry == 0) { // if mtry not specified
     this->mtry = sqrt(num_input_vars);
   } else {
     this->mtry = mtry;
   }
+
+  for (int i = 0; i < num_inputs; i++) {
+    used.push_back(false);
+  }
+
   if (num_inputs != all_outputs_unnorm->size()) {
     cout << "Different numbers of inputs and outputs" << endl;
   }
@@ -78,24 +78,14 @@ MRF::MRF(vector<vector<float>* >* inputs,
   fprintf(stdout,
           "Generating forest with %d inputs, %d input vars, %d output vars\n",
           num_inputs, num_input_vars, num_output_vars);
-  if (update) {
-    float initial_probability = 1.0 / float(num_input_vars);
-    for (int i = 0; i < num_input_vars; i++) {
-      feature_distribution.push_back(initial_probability);
-    }
-    reorder_input_variables();
-  }
   for (int i = 0; i < num_ensembles; i++) {
-    // cout << "Feature distribution: ";
-    // print_float_vector(feature_distribution);
     generate_tree();
-    // if (i != 0)
-    //   destroy_worst_trees();
     if (log) {
       stringstream out;
       out << i;
       string iteration = out.str();
       determine_predictions_errors();
+      cout << "Determined predictions and errors" << endl;
       string out_str(output_dir);
       string predict_filename = out_str+"predict_"+iteration+".txt";
       string mse_filename = out_str+"MSE_" +iteration+".txt";
@@ -105,11 +95,6 @@ MRF::MRF(vector<vector<float>* >* inputs,
                                mse_filename.c_str());
       cout << "Wrote predictions and errors" << endl;
     }
-    // string feature_filename = "feature_dist_" + iteration + ".txt";
-    // write_feature_distribution(feature_filename.c_str());
-    // cout << "Wrote feature distribution" << endl;
-    // update_feature_distribution();
-    // cout << "Updated feature distribution" << endl;
   }
   cout << "Generated forest" << endl;
   determine_predictions_errors();
@@ -160,11 +145,12 @@ void MRF::normalize_output() {
 void MRF::generate_tree() {
   // create subsets of the input with replacement, each in its own root node
   Node* root = new Node;
-  vector<bool> used(num_inputs, false);
+  vector<bool> used_here(num_inputs, false);
   for (int j = 0; j < num_inputs; j++) {
     int index = rand() % num_inputs;
-    if (!(used[index])) {
-      used[index] = true;
+    if (!(used_here[index])) {
+      used_here[index] = true;
+      // used[index] = true;
       root->inputs.push_back(all_inputs->at(index));
       root->outputs.push_back(all_outputs.at(index));
     }
@@ -189,12 +175,59 @@ void MRF::generate_tree() {
   printf("%.2lf seconds taken to create tree\n", difftime(end, start));
 }
 
-void MRF::destroy_worst_trees() {
+void MRF::calculate_var_importance() {
+  // calculate MSE on OOB for each tree
   vector<float> tree_errors;
-  // determine mean MSE on out of bag inputs for each tree
-  vector<int> indices(roots.size(), 0);
+  calculate_tree_errors(tree_errors);
+  vector<float> var_importance;
+
+  for (int i = 0; i < num_input_vars; i++) {
+    // permute one variable and do the same
+    vector<float> var_values;
+    for (int j = 0; j < num_inputs; j++) {
+      var_values.push_back(all_inputs->at(j)->at(i));
+    }
+    vector<float> var_values_permuted = var_values;
+    random_shuffle(var_values_permuted.begin(), var_values_permuted.end());
+    for (int j = 0; j < num_inputs; j++) {
+      all_inputs->at(j)->at(i) = var_values_permuted.at(j);
+    }
+    vector<float> tree_errors_permuted;
+    calculate_tree_errors(tree_errors_permuted);
+    
+    // find average difference, normalized by standard error
+    vector<float> MSE_differences;
+    for (int j = 0; j < tree_errors.size(); j++) {
+      MSE_differences.push_back(tree_errors_permuted[j] - tree_errors[j]);
+    }
+    
+    float mean = calculate_mean(MSE_differences);
+    float deviation = calculate_standard_deviation(MSE_differences);
+    var_importance.push_back(mean/deviation);
+  }
+
+  vector<vector<float>* > matrix;
+  matrix.push_back(&var_importance);
+  write_output("var_importance.txt", matrix);
+}
+
+float MRF::calculate_mean(vector<float>& values) {
+  return accumulate(values.begin(), values.end(), 0.0f) / values.size();
+} 
+
+float MRF::calculate_standard_deviation(vector<float>& values) {
+  float mean = calculate_mean(values);
+  vector<float> zero_mean(values);
+  transform(zero_mean.begin(), zero_mean.end(), zero_mean.begin(),
+            bind2nd(minus<float>(), mean));
+  // find the standard deviation
+  float deviation = inner_product(zero_mean.begin(), zero_mean.end(),
+                                  zero_mean.begin(), 0.0f );
+  return sqrt(deviation / (values.size() - 1 ));
+}
+
+void MRF::calculate_tree_errors(vector<float>& tree_errors) {
   for (int i = 0; i < roots.size(); i++) {
-    indices.at(i) = i;
     Node* root = roots.at(i);
     if (root->error == -1) {
       vector<int>* OOB_tree = OOB.at(i);
@@ -211,21 +244,6 @@ void MRF::destroy_worst_trees() {
       root->error = total_MSE / float(OOB.size());
     } 
     tree_errors.push_back(root->error);
-  }
-  print_float_vector(tree_errors);
-  sort(indices.begin(), indices.end(),
-       index_cmp<vector<float>&>(tree_errors));
-  reverse(indices.begin(), indices.end());
-  vector<int> to_remove;
-  print_int_vector(indices);
-  for (int i = 0; i < number_to_destroy; i++) {
-    int index = indices.at(i);
-    to_remove.push_back(indices.at(i));
-  }
-  sort(to_remove.begin(), to_remove.end());
-  for (int i = 0; i < number_to_destroy; i++) {
-    delete roots.at(to_remove.at(i) - i);
-    roots.erase(roots.begin() + to_remove.at(i) - i);
   }
 }
 
@@ -256,19 +274,13 @@ void MRF::create_tree(Node* root) {
 void MRF::perform_best_split(Node* root) {
   // determine random subset of size mtry
   vector<int> subset(mtry, 0);
-  // if (!update) {
-    int m = mtry; // number left to select
-    for (int i = 0; i < num_input_vars; i++) {
-      if (rand() % (num_input_vars-i) < m) {
-        subset[m-1] = i;
-        m--;
-      }
+  int m = mtry; // number left to select
+  for (int i = 0; i < num_input_vars; i++) {
+    if (rand() % (num_input_vars-i) < m) {
+      subset[m-1] = i;
+      m--;
     }
-  // } else {
-  //  dist_sample(feature_distribution, ordering, subset);
-  // }
-  // cout << "Subset selected: ";
-  // print_int_vector(subset);
+  }
   
   // determine best split on this subset
   float root_score = get_node_impurity(root);
@@ -384,8 +396,12 @@ void MRF::determine_predictions_errors() {
   determine_predictions();
   prediction_errors.clear();
   for (int i = 0; i < num_inputs; i++) {
-    float mse = MSE(all_outputs.at(i), predictions.at(i));
-    prediction_errors.push_back(mse);
+    if (!used[i]) {
+      float mse = MSE(all_outputs.at(i), predictions.at(i));
+      prediction_errors.push_back(mse);
+    } else {
+      prediction_errors.push_back(-1);
+    }
   }
 }
 
@@ -401,15 +417,17 @@ void MRF::determine_predictions() {
   // determine normalized predictions
   vector<vector<float>* >::iterator it;
   for (it = predictions.begin(); it != predictions.end(); it++) {
-    delete *it;
+    if (*it != NULL) {
+      delete *it;
+    }
   }
   predictions.clear();
-  for (it = all_inputs->begin(); it != all_inputs->end(); it++) {
-    vector<float>* output = new vector<float>(num_output_vars, 0);
-    if (output == NULL || *it == NULL) {
-      cout << output << " " << *it << endl;
+  for (int i = 0; i < num_inputs; i++) {
+    vector<float>* output = NULL;
+    if (!used[i]) {
+      output = new vector<float>(num_output_vars, 0);
+      output_estimate(all_inputs->at(i), output, roots);
     }
-    output_estimate(*it, output, roots);
     predictions.push_back(output);
   }
 }
@@ -426,107 +444,10 @@ void MRF::determine_variable_stats(vector<vector<float>* >* matrix,
       values.push_back((*it)->at(i));
     }
     // find the mean
-    float mean = accumulate(values.begin(), values.end(), 0.0f) / values.size();
+    float mean = calculate_mean(values);
     means.push_back(mean);
-    vector<float> zero_mean(values);
-    transform(zero_mean.begin(), zero_mean.end(), zero_mean.begin(),
-              bind2nd(minus<float>(), mean));
-    // find the standard deviation
-    float deviation = inner_product(zero_mean.begin(), zero_mean.end(),
-                                    zero_mean.begin(), 0.0f );
-    deviation = sqrt(deviation / (values.size() - 1 ));
+    float deviation = calculate_standard_deviation(values);
     deviations.push_back(deviation);
-  }
-}
-   
-void MRF::update_feature_distribution() {
-  float** perturbation_errors = new float* [num_inputs];
-  for (int j = 0; j < num_inputs; j ++)
-    perturbation_errors[j] = new float[num_input_vars];
-
-  cilk_for (int i = 0; i < num_inputs; i++) {
-    cilk_for (int j = 0; j < num_input_vars; j++) { 
-      // total perturbation errors for input i with noise on feature j 
-      float total_MSE = 0;
-      for (int n = 0; n < PERTURBATIONS; n++) { 
-        vector<float> features = *(all_inputs->at(i));
-        // noise up feature j using a normal distribution 
-        float noise = random_normal(input_means[j], input_devs[j]);
-        features[j] = noise;
-        // compute new prediction error for input
-        vector<float> predicted_output(num_output_vars, 0);
-        output_estimate(&features, &predicted_output, roots); 
-        float mse = MSE(all_outputs_unnorm->at(i), &predicted_output);
-        total_MSE += mse;
-      }
-      // store average over all perturbations
-      perturbation_errors[i][j] = total_MSE / float(PERTURBATIONS);
-      if (total_MSE != total_MSE) {
-        cout << "total mse nan error " << i << " " << j << endl;
-      }
-    }
-  }
-  cout << "Prediction Errors: ";
-  print_float_vector(prediction_errors);
-  // compute weighted variable importance measure
-  for (int j = 0; j < num_input_vars; j++) {
-    float importance = 0;
-    for (int i = 0; i < num_inputs; i++) {
-      importance += prediction_errors[i]*perturbation_errors[i][j];
-    }
-    feature_distribution[j] = importance;
-  }
-  cout << "Feature Distribution: ";
-  print_float_vector(feature_distribution);
-  // normalize feature distribution to give probabilities
-  float total = accumulate(feature_distribution.begin(),
-                           feature_distribution.end(), 0.0f);
-  cout << "Total: " << total << endl;
-  for (int j = 0; j < num_input_vars; j++) {
-    feature_distribution[j] /= float(total);
-  }
-  reorder_input_variables();
-
-  for (int j = 0; j < num_inputs; j++) {
-    delete [] perturbation_errors[j];
-  }
-  delete [] perturbation_errors;
-}
-
-void MRF::reorder_input_variables() {
-  ordering.clear();
-  for (int i = 0; i < num_input_vars; i++) {
-    ordering.push_back(i);
-  }
-  sort(ordering.begin(), ordering.end(),
-       index_cmp<vector<float>&>(feature_distribution));
-  reverse(ordering.begin(), ordering.end());
-  sort(feature_distribution.begin(), feature_distribution.end());
-  reverse(feature_distribution.begin(), feature_distribution.end());
-}
-
-void MRF::dist_sample(vector<float> p, vector<int> perm, vector<int>& ans) {
-  float rT, mass, totalmass;
-  int i, j, k, n1;
-  int n = p.size();
-  int nans = ans.size();
-  
-  /* Compute the sample */
-  totalmass = 1;
-  for (i = 0, n1 = n-1; i < nans; i++, n1--) {
-    rT = totalmass * ranf();
-    mass = 0;
-    for (j = 0; j < n1; j++) {
-      mass += p[j];
-      if (rT <= mass)
-        break;
-      }
-    ans[i] = perm[j];
-    totalmass -= p[j];
-    for(k = j; k < n1; k++) {
-      p[k] = p[k + 1];
-      perm[k] = perm[k + 1];
-    }
   }
 }
 
@@ -608,20 +529,22 @@ void MRF::write_predictions_errors(const char* filename_predictions,
     write_output(norm_filename_predictions, predictions);
   }  
   vector<vector<float>* > predictions_unnorm;
-  vector<vector<float>* >::iterator it;
   // remove normalization
-  for (it = predictions.begin(); it != predictions.end(); it++) {
-    vector<float>* output_unnorm = new vector<float>(**it);
-    for (int i = 0; i < num_output_vars; i++) {
-      output_unnorm->at(i) = (output_unnorm->at(i) * output_devs[i]) + 
-          output_means[i];
+  for (int i = 0; i < num_inputs; i++) {
+    vector<float>* output_unnorm = NULL;
+    if (!used[i]) {
+      output_unnorm = new vector<float>(*(predictions[i]));
+      for (int i = 0; i < num_output_vars; i++) {
+        output_unnorm->at(i) = (output_unnorm->at(i) * output_devs[i]) + 
+            output_means[i];
+      }
     }
     predictions_unnorm.push_back(output_unnorm);
   }
   write_output(filename_predictions, predictions_unnorm);
   write_MSEs(predictions_unnorm, filename_errors, norm_filename_errors);
-  for (it = predictions_unnorm.begin(); it != predictions_unnorm.end(); it++) {
-    delete *it;
+  for (int i = 0; i < num_inputs; i++) {
+    delete predictions_unnorm[i];
   }
 }
 
@@ -635,8 +558,12 @@ void MRF::write_MSEs(vector<vector<float>* >& predictions_unnorm,
   matrix.clear();
   vector<float> MSEs_unnorm;
   for (int i = 0; i < num_inputs; i++) {
-    float mse = MSE(all_outputs_unnorm->at(i), predictions_unnorm.at(i));
-    MSEs_unnorm.push_back(mse);
+    if (!used[i]) {
+      float mse = MSE(all_outputs_unnorm->at(i), predictions_unnorm.at(i));
+      MSEs_unnorm.push_back(mse);
+    } else {
+      MSEs_unnorm.push_back(-1);
+    }
   }
   matrix.push_back(&MSEs_unnorm);
   write_output(filename, matrix);
@@ -651,13 +578,22 @@ void MRF::write_feature_distribution(const char* filename) {
 void MRF::write_output(const char* filename, vector<vector<float>* >& matrix) {
   FILE * outfile = fopen(filename, "w");
   // print the output vectors
+  /*for (int i = 0; i < num_inputs; i++) {
+    if (!used[i]) {
+      fprintf(outfile, "%d ", i);
+    }
+  }
+  fprintf(outfile, "\n");*/
+
   vector<vector<float>* >::iterator it2;
   for (it2 = matrix.begin(); it2 != matrix.end(); it2++) {
-    vector<float>::iterator it3;
-    for (it3 = (*it2)->begin(); it3 != (*it2)->end(); it3++) {
-      fprintf(outfile, "%.6f ", *it3);
+    if ((*it2) != NULL) {
+      vector<float>::iterator it3;
+      for (it3 = (*it2)->begin(); it3 != (*it2)->end(); it3++) {
+        fprintf(outfile, "%.6f ", *it3);
+      }
+      fprintf(outfile, "\n");
     }
-    fprintf(outfile, "\n");
   }
   fclose(outfile);
 }
@@ -746,36 +682,30 @@ int cilk_main(int argc, char** argv) {
   const char* input_file;
   char* output_dir;
   const char* actual_file;
-  bool update_feature_dist = false;
   bool log_after_every_tree = false;
   int num_trees = 1000;
   for (int i = 1; i < argc; i++) {
-    if (i+1 != argc) {
-      if (strcmp(argv[i], "--output_dir") == 0) {
-        output_dir = argv[i+1];
-        if (output_dir[strlen(argv[i+1])-1] != '/') {
-          output_dir = strcat(argv[i+1], "/");
-        } else {
-          output_dir = argv[i+1];
-        }
-        i++;
-      } else if (strcmp(argv[i], "--input_file") == 0) {
-        input_file = argv[i+1];
-        i++;
-      } else if (strcmp(argv[i], "--actual_file") == 0) {
-        actual_file = argv[i+1];
-        i++;
-      } else if (strcmp(argv[i], "--num_trees") == 0) {
-        num_trees = atoi(argv[i+1]);
-        i++;
+    if (i+1 != argc && strcmp(argv[i], "--output_dir") == 0) {
+      output_dir = argv[i+1];
+      if (output_dir[strlen(argv[i+1])-1] != '/') {
+        output_dir = strcat(argv[i+1], "/");
       } else {
-        cout << "Invalid arguments\n" << endl;
+        output_dir = argv[i+1];
       }
-    }
-    if (strcmp(argv[i], "--update_feature_dist") == 0) {
-      update_feature_dist = true;
+      i++;
+    } else if (i+1 != argc && strcmp(argv[i], "--input_file") == 0) {
+      input_file = argv[i+1];
+      i++;
+    } else if (i+1 != argc && strcmp(argv[i], "--actual_file") == 0) {
+      actual_file = argv[i+1];
+      i++;
+    } else if (i+1 != argc && strcmp(argv[i], "--num_trees") == 0) {
+      num_trees = atoi(argv[i+1]);
+      i++;
     } else if (strcmp(argv[i], "--log_after_every_tree") == 0) {
       log_after_every_tree = true;
+    } else {
+      cout << "Invalid arguments\n" << endl;
     }
   }
   vector<vector<float>* > all_inputs;
@@ -786,18 +716,15 @@ int cilk_main(int argc, char** argv) {
   cout << "Reading actual data: " << actual_file << endl;
   MRF::read_data(actual_file, all_outputs, NULL);
   // all_inputs.resize(1000); all_outputs.resize(1000);
-  // update, iterations, number_to_destroy, num_ensembles, mtry, min_terminal_size
+  // num_ensembles, mtry, min_terminal_size
   MRF mrf(&all_inputs,
           &discrete,
           &all_outputs,
           output_dir,
           log_after_every_tree,
           num_trees, 
-          update_feature_dist,
-          1,
-          1,
-          20,
-          20);
+          0, // defaults to sqrt feature number
+          5);
   cout << "Writing predictions, MSEs, trees in " << output_dir << endl;
   string out_str(output_dir);
   string predicted_file = out_str + "predicted.txt";
@@ -812,5 +739,4 @@ int cilk_main(int argc, char** argv) {
                                MSE_norm_file.c_str());
   mrf.print_trees(trees_file.c_str());
   mrf.print_OOB(OOB_file.c_str());
-  // mrf.write_feature_distribution("feature_dist.txt");
 }

@@ -66,6 +66,7 @@ class MRF {
     vector<float> output_devs;
     vector<Node*> roots;
     vector<vector<int>* > OOB;
+    vector<bool> used;
     vector<vector<float>* > predictions;
     vector<float> prediction_errors;
     vector<float> feature_distribution;
@@ -90,10 +91,6 @@ class MRF {
                                   vector<float>& means,
                                   vector<float>& deviations);
     void determine_predictions_errors();
-    void update_feature_distribution();
-    void reorder_input_variables();
-    void dist_sample(vector<float> p, vector<int> perm, vector<int>& ans);
-    void destroy_worst_trees();
 
   public:
     MRF(vector<vector<float>* >* all_inputs,
@@ -102,9 +99,6 @@ class MRF {
         char* output_dir,
         bool log,
         int num_ensembles,
-        bool update,
-        int iterations,
-        int number_to_destroy,
         int mtry,
         int min_terminal_size);
     ~MRF();
@@ -112,7 +106,7 @@ class MRF {
                          vector<Node*>& trees);
     static void read_data(const char* filename, vector<vector<float>* >& matrix,
                          vector<bool>* discrete);
-    static void write_output(const char* filename,
+    void write_output(const char* filename,
                             vector<vector<float>* >& matrix);
     void write_predictions_errors(const char* filename_predictions,
                                   const char* filename_errors,
@@ -125,6 +119,10 @@ class MRF {
     void print_int_vector(vector<int>& vec);
     void print_float_vector(vector<float>& vec);
     void write_feature_distribution(const char* filename);
+    void calculate_var_importance();
+    float calculate_mean(vector<float>& values);
+    float calculate_standard_deviation(vector<float>& values);
+    void calculate_tree_errors(vector<float>& tree_errors);
 };
 
 #endif /* MRF_H */
