@@ -65,8 +65,8 @@ class MRF {
     vector<float> output_means;
     vector<float> output_devs;
     vector<Node*> roots;
-    vector<vector<int>* > OOB_inputs_for_tree;
-    vector<vector<int>* > OOB_trees_for_inputs;
+    vector<vector<int>* > OOB_inputs_for_trees;
+    vector<vector<Node*>* > OOB_trees_for_inputs;
     vector<vector<float>* > predictions;
     vector<float> prediction_errors;
 

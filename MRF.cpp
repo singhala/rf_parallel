@@ -76,7 +76,7 @@ MRF::MRF(vector<vector<float>* >* inputs,
   normalize_output();
   
   for (int i = 0; i < num_input_vars; i++) {
-    vector<int>* OOB_trees = new vector<int>;
+    vector<Node*>* OOB_trees = new vector<Node*>;
     OOB_trees_for_inputs.push_back(OOB_trees);
   }
   
@@ -111,13 +111,6 @@ MRF::~MRF() {
   for (it = roots.begin(); it != roots.end(); it++) {
     delete *it;
   }
-  vector<vector<int>* >::iterator it3;
-  for (it3 = OOB_inputs_for_trees.begin(); it3 != OOB_inputs_for_trees.end(); it3++) {
-    delete *it3;
-  }
-  for (it3 = OOB_trees_for_inputs.begin(); it3 != OOB_trees_for_inputs.end(); it3++) {
-    delete *it3;
-  }
   vector<vector<float>* >::iterator it2;
   for (it2 = all_inputs->begin(); it2 != all_inputs->end(); it2++) {
     delete *it2;
@@ -131,6 +124,14 @@ MRF::~MRF() {
   }
   for (it2 = predictions.begin(); it2 != predictions.end(); it2++) {
     delete *it2;
+  }
+  vector<vector<int>* >::iterator it3;
+  for (it3 = OOB_inputs_for_trees.begin(); it3 != OOB_inputs_for_trees.end(); it3++) {
+    delete *it3;
+  }
+  vector<vector<Node*>* >::iterator it4;
+  for (it4 = OOB_trees_for_inputs.begin(); it4 != OOB_trees_for_inputs.end(); it4++) {
+    delete *it3;
   }
 }
 
@@ -162,14 +163,14 @@ void MRF::generate_tree() {
   }
    
   // determine the inputs that are OOB for this tree
-  int tree_index = OOB.inputs_for_tree.size();
   vector<int>* OOB_inputs = new vector<int>;
   for (int j = 0; j < num_inputs; j++) {
     if (!(used_here[j])) {
       OOB_inputs->push_back(j);
+      OOB_trees_for_inputs.at(j)->push_back(root);
     }
   }
-  OOB_inputs_for_tree.push_back(OOB_inputs);
+  OOB_inputs_for_trees.push_back(OOB_inputs);
   // printf("Ensemble %d: %d inputs OOB\n", i, count);
   roots.push_back(root);
 
@@ -236,12 +237,12 @@ void MRF::calculate_tree_errors(vector<float>& tree_errors) {
   for (int i = 0; i < roots.size(); i++) {
     Node* root = roots.at(i);
     if (root->error == -1) {
-      vector<int>* OOB_tree = OOB.at(i);
+      vector<int>* OOB_inputs = OOB_inputs_for_trees.at(i);
       vector<Node*> this_tree;
       this_tree.push_back(root);
       float total_MSE = 0;
-      for (int j = 0; j < OOB_tree->size(); j++) {
-        int input_index = OOB_tree->at(j);
+      for (int j = 0; j < OOB_inputs->size(); j++) {
+        int input_index = OOB_inputs->at(j);
         vector<float>* input = all_inputs->at(input_index);
         vector<float> predicted_output(num_output_vars, 0);
         output_estimate(input,  &predicted_output, this_tree);
@@ -402,12 +403,8 @@ void MRF::determine_predictions_errors() {
   determine_predictions();
   prediction_errors.clear();
   for (int i = 0; i < num_inputs; i++) {
-    if (!used[i]) {
-      float mse = MSE(all_outputs.at(i), predictions.at(i));
-      prediction_errors.push_back(mse);
-    } else {
-      prediction_errors.push_back(-1);
-    }
+    float mse = MSE(all_outputs.at(i), predictions.at(i));
+    prediction_errors.push_back(mse);
   }
 }
 
@@ -430,10 +427,8 @@ void MRF::determine_predictions() {
   predictions.clear();
   for (int i = 0; i < num_inputs; i++) {
     vector<float>* output = NULL;
-    vector<float> trees;
-    vector<float>::iterator it;
     output = new vector<float>(num_output_vars, 0);
-    output_estimate(all_inputs->at(i), output, roots);
+    output_estimate(all_inputs->at(i), output, *(OOB_trees_for_inputs.at(i)));
     predictions.push_back(output);
   }
 }
