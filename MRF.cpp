@@ -24,7 +24,6 @@
 #include "MRF.h"
 
 #define DIVISIONS 5
-#define PERTURBATIONS 10
 
 MRF::MRF(vector<vector<float>* >* inputs,
          vector<bool>* discrete,
