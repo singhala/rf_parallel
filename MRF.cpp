@@ -49,10 +49,6 @@ MRF::MRF(vector<vector<float>* >* inputs,
     this->mtry = mtry;
   }
 
-  for (int i = 0; i < num_inputs; i++) {
-    used.push_back(false);
-  }
-
   if (num_inputs != all_outputs_unnorm->size()) {
     cout << "Different numbers of inputs and outputs" << endl;
   }
@@ -75,7 +71,7 @@ MRF::MRF(vector<vector<float>* >* inputs,
   determine_variable_stats(all_inputs, input_means, input_devs);
   normalize_output();
   
-  for (int i = 0; i < num_input_vars; i++) {
+  for (int i = 0; i < num_inputs; i++) {
     vector<Node*>* OOB_trees = new vector<Node*>;
     OOB_trees_for_inputs.push_back(OOB_trees);
   }
@@ -157,9 +153,11 @@ void MRF::generate_tree() {
   vector<bool> used_here(num_inputs, false);
   for (int j = 0; j < num_inputs; j++) {
     int index = rand() % num_inputs;
-    used_here[index] = true;
-    root->inputs.push_back(all_inputs->at(index));
-    root->outputs.push_back(all_outputs.at(index));
+    if (!(used_here[index])) {
+      used_here[index] = true;
+      root->inputs.push_back(all_inputs->at(index));
+      root->outputs.push_back(all_outputs.at(index));
+    }
   }
    
   // determine the inputs that are OOB for this tree
@@ -171,9 +169,9 @@ void MRF::generate_tree() {
     }
   }
   OOB_inputs_for_trees.push_back(OOB_inputs);
-  // printf("Ensemble %d: %d inputs OOB\n", i, count);
+  root->tree_index = roots.size();
   roots.push_back(root);
-
+  printf("Ensemble\n");
   time_t start, end;
   time(&start);
   create_tree(roots.at(roots.size()-1));
@@ -248,7 +246,7 @@ void MRF::calculate_tree_errors(vector<float>& tree_errors) {
         output_estimate(input,  &predicted_output, this_tree);
         total_MSE += MSE(all_outputs.at(input_index), &predicted_output);
       }
-      root->error = total_MSE / float(OOB.size());
+      root->error = total_MSE / float(OOB_inputs->size());
     } 
     tree_errors.push_back(root->error);
   }
@@ -489,14 +487,27 @@ void MRF::print_trees(const char* filename) {
   }
 }
 
-void MRF::print_OOB(const char* filename) {
+void MRF::print_OOB_inputs_for_trees(const char* filename) {
   ofstream file(filename);
   vector<vector<int>* >::iterator it;
   vector<int>::iterator it2;
-  for (it = OOB.begin(); it < OOB.end(); it++) {
-    vector<int>* OOB_tree = *it;
-    for (it2 = OOB_tree->begin(); it2 < OOB_tree->end(); it2++) {
+  for (it = OOB_inputs_for_trees.begin(); it < OOB_inputs_for_trees.end(); it++) {
+    vector<int>* OOB_inputs = *it;
+    for (it2 = OOB_inputs->begin(); it2 < OOB_inputs->end(); it2++) {
       file << *it2 << " ";
+    }
+    file << endl;
+  }
+}
+
+void MRF::print_OOB_trees_for_inputs(const char* filename) {
+  ofstream file(filename);
+  vector<vector<Node*>* >::iterator it;
+  vector<Node*>::iterator it2;
+  for (it = OOB_trees_for_inputs.begin(); it < OOB_trees_for_inputs.end(); it++) {
+    vector<Node*>* OOB_trees = *it;
+    for (it2 = OOB_trees->begin(); it2 < OOB_trees->end(); it2++) {
+      file << (*it2)->tree_index << " ";
     }
     file << endl;
   }
@@ -533,12 +544,10 @@ void MRF::write_predictions_errors(const char* filename_predictions,
   // remove normalization
   for (int i = 0; i < num_inputs; i++) {
     vector<float>* output_unnorm = NULL;
-    if (!used[i]) {
-      output_unnorm = new vector<float>(*(predictions[i]));
-      for (int i = 0; i < num_output_vars; i++) {
-        output_unnorm->at(i) = (output_unnorm->at(i) * output_devs[i]) + 
-            output_means[i];
-      }
+    output_unnorm = new vector<float>(*(predictions[i]));
+    for (int i = 0; i < num_output_vars; i++) {
+      output_unnorm->at(i) = (output_unnorm->at(i) * output_devs[i]) + 
+          output_means[i];
     }
     predictions_unnorm.push_back(output_unnorm);
   }
@@ -559,20 +568,10 @@ void MRF::write_MSEs(vector<vector<float>* >& predictions_unnorm,
   matrix.clear();
   vector<float> MSEs_unnorm;
   for (int i = 0; i < num_inputs; i++) {
-    if (!used[i]) {
-      float mse = MSE(all_outputs_unnorm->at(i), predictions_unnorm.at(i));
-      MSEs_unnorm.push_back(mse);
-    } else {
-      MSEs_unnorm.push_back(-1);
-    }
+    float mse = MSE(all_outputs_unnorm->at(i), predictions_unnorm.at(i));
+    MSEs_unnorm.push_back(mse);
   }
   matrix.push_back(&MSEs_unnorm);
-  write_output(filename, matrix);
-}
-
-void MRF::write_feature_distribution(const char* filename) {
-  vector<vector<float>* > matrix;
-  matrix.push_back(&feature_distribution);
   write_output(filename, matrix);
 }
 
@@ -745,11 +744,13 @@ int cilk_main(int argc, char** argv) {
   string predicted_norm_file = out_str + "predicted_norm.txt";
   string MSE_norm_file = out_str + "MSE_norm.txt";
   string trees_file = out_str + "trees.txt";
-  string OOB_file = out_str + "OOB.txt";
+  string OOB_trees_for_inputs_file = out_str + "OOB_trees_for_inputs.txt";
+  string OOB_inputs_for_trees_file = out_str + "OOB_inputs_for_trees.txt";
   mrf.write_predictions_errors(predicted_file.c_str(),
                                MSE_file.c_str(),
                                predicted_norm_file.c_str(),
                                MSE_norm_file.c_str());
   mrf.print_trees(trees_file.c_str());
-  mrf.print_OOB(OOB_file.c_str());
+  mrf.print_OOB_trees_for_inputs(OOB_trees_for_inputs_file.c_str());
+  mrf.print_OOB_inputs_for_trees(OOB_inputs_for_trees_file.c_str());
 }

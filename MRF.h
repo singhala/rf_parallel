@@ -22,6 +22,7 @@ struct Node {
   Node* child1;
   Node* child2;
   float error;
+  int tree_index;
 
   Node() {
     child1 = NULL;
@@ -74,7 +75,7 @@ class MRF {
     float get_node_impurity(Node* node);
     void split_node(Node* node, int var_index, float var_value, Node* child1,
                     Node* child2);
-    void generate_tree(int tree_index);
+    void generate_tree();
     static void tokenize(string line, vector<string>& tokens);
     void print_node(ofstream& file, Node* node, bool left, int level,
                    int split_index, float split_value);
@@ -113,7 +114,8 @@ class MRF {
     void write_MSEs(vector<vector<float>* >& predictions_unnorm,
                     const char* filename, const char* norm_filename=NULL);
     void print_trees(const char* filename);
-    void print_OOB(const char* filename);
+    void print_OOB_trees_for_inputs(const char* filename);
+    void print_OOB_inputs_for_trees(const char* filename);
     void print_int_vector(vector<int>& vec);
     void print_float_vector(vector<float>& vec);
     void write_feature_distribution(const char* filename);
