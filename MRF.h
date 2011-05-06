@@ -8,7 +8,7 @@ using namespace std;
 template<class T>
 struct index_cmp {
   index_cmp(const T arr) : arr(arr) {}
-  bool operator()(const size_t a, const size_t b) const
+  bool operator()(const int a, const int b) const
   { return arr[a] < arr[b]; }
   const T arr;
 };
@@ -72,7 +72,10 @@ class MRF {
     vector<float> prediction_errors;
 
     void create_tree(Node* root);
+    void make_leaf(Node* root);
     float get_node_impurity(Node* node);
+    float get_node_impurity_sum(vector<float>& sum, Node* node, int start, int end,
+                                vector<int>& input_indices);
     void split_node(Node* node, int var_index, float var_value, Node* child1,
                     Node* child2);
     void generate_tree();
@@ -83,7 +86,8 @@ class MRF {
     void determine_predictions();
     void determine_MSEs();
     float MSE(vector<float>* actual, vector<float>* predicted);
-    void perform_best_split(Node* root);
+    bool perform_best_split(Node* root);
+    void perform_best_split_old(Node* root);
     inline float ranf();
     float random_normal(float mean, float dev);
     void determine_variable_stats(vector<vector<float>* >* matrix,

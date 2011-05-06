@@ -255,28 +255,146 @@ void MRF::calculate_tree_errors(vector<float>& tree_errors) {
 void MRF::create_tree(Node* root) {
   if (root->inputs.size() <= min_terminal_size) {
     // cout << "Reached leaf of size " << root->inputs.size() << endl;
-    // calculate mean_output in the leaf
-    root->mean_output = new vector<float>;
-    vector<vector<float>* >::iterator it;
-    for (int i = 0; i < num_output_vars; i++) {
-      float total = 0;
-      for (it = root->outputs.begin(); it != root->outputs.end(); it++) {
-        total += (*it)->at(i);
-      }
-      root->mean_output->push_back(total / root->outputs.size());
-    }
     // don't split past min_terminal_size
+    make_leaf(root);
     return;
   }
-  perform_best_split(root);
-  // create the tree beginning at the children
-  // cout << "Splitting on left child: size " << root->child1->inputs.size() << endl;
-  cilk_spawn create_tree(root->child1);
-  // cout << "Splitting on right child: size " << root->child2->inputs.size() << endl;
-  create_tree(root->child2);
+  if (perform_best_split(root)) {
+    // better split found
+    // create the tree beginning at the children
+    cout << "Splitting on left child: size " << root->child1->inputs.size() << endl;
+    cilk_spawn create_tree(root->child1);
+    cout << "Splitting on right child: size " << root->child2->inputs.size() << endl;
+    create_tree(root->child2);
+  } else {
+    // no better split found
+    make_leaf(root);
+  }
 }
 
-void MRF::perform_best_split(Node* root) {
+void MRF::make_leaf(Node* root) {
+  // calculate mean_output in the leaf
+  root->mean_output = new vector<float>;
+  vector<vector<float>* >::iterator it;
+  for (int i = 0; i < num_output_vars; i++) {
+    float total = 0;
+    for (it = root->outputs.begin(); it != root->outputs.end(); it++) {
+      total += (*it)->at(i);
+    }
+    root->mean_output->push_back(total / root->outputs.size());
+  }
+}
+
+bool MRF::perform_best_split(Node* root) {
+  // determine random subset of size mtry
+  vector<int> subset(mtry, 0);
+  int m = mtry; // number left to select
+  for (int i = 0; i < num_input_vars; i++) {
+    if (rand() % (num_input_vars-i) < m) {
+      subset[m-1] = i;
+      m--;
+    }
+  }
+  // determine overall sum of each output variable with entities in node  
+  vector<float> overall_sum;
+  for (int j = 0; j < num_output_vars; j++) {
+    float total = 0;
+    vector<vector<float>* >::iterator it;
+    for (it = root->outputs.begin(); it != root->outputs.end(); it++) {
+      total += (*it)->at(j);
+    }
+    overall_sum.push_back(total);
+  }
+  int num_node_inputs = root->inputs.size();
+  float root_impurity = get_node_impurity(root);
+  
+  Split best_split = {-1, -1};
+  float best_split_score = -1;
+  for (int i = 0; i < mtry; i++) {
+    // determine values of all entities for this input variable
+    int variable_index = subset.at(i);
+    vector<int> input_indices;
+    vector<float> var_values;
+    for (int j = 0; j < num_node_inputs; j++) {
+      var_values.push_back(root->inputs.at(j)->at(variable_index));
+      input_indices.push_back(j);
+    }
+    // sort entities' indices by these values
+    sort(input_indices.begin(), input_indices.end(),
+         index_cmp<vector<float>&>(var_values));
+    sort(var_values.begin(), var_values.end());
+    // iteratively add each to left child and subtract from right, check split score
+    vector<float> left_sum(num_output_vars, 0);
+    vector<float> right_sum(overall_sum);
+    int j; // will be first index in right child
+    float split; // left is <= split, right is > split
+    for (j = -1; j < num_node_inputs; ) {
+      if (j != -1) { // start with empty left child
+        do {
+          for (int h = 0; h < num_output_vars; h++) {
+            left_sum[h] += root->outputs[input_indices[j]]->at(h);
+            right_sum[h] -= root->outputs[input_indices[j]]->at(h);
+          }
+          j++;
+          // group together entities with same value to reduce computation
+        } while (j != num_node_inputs && var_values.at(j) == var_values.at(j-1));
+        split = var_values[j-1];
+      } else {
+        j++;
+        split = var_values[0] - 1;
+      }
+      float left_impurity = get_node_impurity_sum(left_sum, root, 0, j, input_indices);
+      float right_impurity = get_node_impurity_sum(right_sum, root, j, num_node_inputs,
+                                                   input_indices);
+      float split_score = root_impurity - left_impurity - right_impurity;
+      if (split_score > best_split_score) {
+        best_split.variable_index = variable_index;
+        best_split.split_value = split;
+        best_split_score = split_score;
+      }
+    }
+  }
+  cout << "Best split index: " << best_split.variable_index << endl;
+  cout << "Best split value: " << best_split.split_value << endl;
+  cout << "Best split score: " << best_split_score << endl;
+  if (best_split_score == 0) {
+    // no better split found
+    cout << "No better split found" << endl;
+    return false;
+  }
+  // record and execute this split
+  // put appropriate entities in each child for best split
+  root->child1 = new Node;
+  root->child2 = new Node;
+  split_node(root, best_split.variable_index, best_split.split_value, root->child1,
+             root->child2);
+
+  root->split_variable = best_split.variable_index;
+  root->split_value = best_split.split_value;
+  return true;
+}
+
+float MRF::get_node_impurity_sum(vector<float>& sum, Node* node,
+                                 int start, int end, vector<int>& input_indices) {
+  if (start == end) {
+    return 0;
+  }
+  // find the mean of each variable for the inputs in the node
+  vector<float> means;
+  for (int i = 0; i < num_output_vars; i++) {
+    means.push_back(sum[i] / (end - start));
+  }
+  // sum the squares of the errors from this mean
+  float sum_of_squares = 0;
+  for (int j = start; j < end; j++) {  
+    for (int i = 0; i < num_output_vars; i++) {
+      sum_of_squares += pow(node->outputs[input_indices[j]]->at(i) - means.at(i), 2);
+    }
+  }
+  return sum_of_squares;
+}
+
+void MRF::perform_best_split_old(Node* root) {
   // determine random subset of size mtry
   vector<int> subset(mtry, 0);
   int m = mtry; // number left to select
@@ -338,7 +456,7 @@ void MRF::split_node(Node* node, int var_index, float var_value, Node* child1,
   for (int i = 0; i < node->inputs.size(); i++) {
     vector<float>* input = node->inputs.at(i);
     vector<float>* output = node->outputs.at(i);
-    if (input->at(var_index) >= var_value) {
+    if (input->at(var_index) > var_value) {
       child2->inputs.push_back(input);
       child2->outputs.push_back(output);
     } else {
