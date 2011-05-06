@@ -87,7 +87,7 @@ class MRF {
     void determine_MSEs();
     float MSE(vector<float>* actual, vector<float>* predicted);
     bool perform_best_split(Node* root);
-    void perform_best_split_old(Node* root);
+    bool perform_best_split_old(Node* root);
     inline float ranf();
     float random_normal(float mean, float dev);
     void determine_variable_stats(vector<vector<float>* >* matrix,

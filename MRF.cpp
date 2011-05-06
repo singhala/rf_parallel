@@ -259,7 +259,7 @@ void MRF::create_tree(Node* root) {
     make_leaf(root);
     return;
   }
-  if (perform_best_split(root)) {
+  if (perform_best_split_old(root)) {
     // better split found
     // create the tree beginning at the children
     cout << "Splitting on left child: size " << root->child1->inputs.size() << endl;
@@ -394,7 +394,7 @@ float MRF::get_node_impurity_sum(vector<float>& sum, Node* node,
   return sum_of_squares;
 }
 
-void MRF::perform_best_split_old(Node* root) {
+bool MRF::perform_best_split_old(Node* root) {
   // determine random subset of size mtry
   vector<int> subset(mtry, 0);
   int m = mtry; // number left to select
@@ -449,6 +449,7 @@ void MRF::perform_best_split_old(Node* root) {
              root->child2);
   root->split_variable = best_split_index;
   root->split_value = best_split_value;
+  return true;
 }
 
 void MRF::split_node(Node* node, int var_index, float var_value, Node* child1,
