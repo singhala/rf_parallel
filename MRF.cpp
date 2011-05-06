@@ -457,7 +457,7 @@ void MRF::split_node(Node* node, int var_index, float var_value, Node* child1,
   for (int i = 0; i < node->inputs.size(); i++) {
     vector<float>* input = node->inputs.at(i);
     vector<float>* output = node->outputs.at(i);
-    if (input->at(var_index) > var_value) {
+    if (input->at(var_index) >= var_value) {
       child2->inputs.push_back(input);
       child2->outputs.push_back(output);
     } else {
