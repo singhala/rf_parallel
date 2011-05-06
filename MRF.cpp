@@ -356,9 +356,9 @@ bool MRF::perform_best_split(Node* root) {
   // cout << "Best split index: " << best_split.variable_index << endl;
   // cout << "Best split value: " << best_split.split_value << endl;
   // cout << "Best split score: " << best_split_score << endl;
-  if (best_split_score == 0) {
+  /*if (best_split_score == 0) {
     return false;
-  }
+  }*/
   // record and execute this split
   // put appropriate entities in each child for best split
   root->child1 = new Node;
