@@ -295,9 +295,9 @@ bool MRF::perform_best_split(Node* root) {
       m--;
     }
   }
-  float best_split_score = 0;
-  Split best_split = perform_best_split_old(root, subset, best_split_score);
-  /*cout << "Other best split index: " << other_best.variable_index << endl;
+  float score = 0;
+  Split other_best = perform_best_split_old(root, subset, score);
+  cout << "Other best split index: " << other_best.variable_index << endl;
   cout << "Other best split value: " << other_best.split_value << endl;
   cout << "Other best split score: " << score << endl;
   // determine overall sum of each output variable with entities in node  
@@ -314,8 +314,6 @@ bool MRF::perform_best_split(Node* root) {
   float root_impurity = get_node_impurity(root);
   Split best_split = {-1, -1};
   float best_split_score = -1;
-  vector<int> left_indices;
-  vector<int> right_indices;
   for (int i = 0; i < mtry; i++) {
     // determine values of all entities for this input variable
     int variable_index = subset.at(i);
@@ -344,11 +342,16 @@ bool MRF::perform_best_split(Node* root) {
           j++;
           // group together entities with same value to reduce computation
         } while (j != num_node_inputs && var_values.at(j) == var_values.at(j-1));
-        split = var_values[j-1];
+        split = var_values[j];
       } else {
         j++;
         split = var_values[0] - 1;
       }
+      /*Node child1, child2;
+      split_node(root, variable_index, split, &child1, &child2);
+      float split_score = root_impurity - get_node_impurity(&child1) - 
+          get_node_impurity(&child2);*/
+      
       float left_impurity = get_node_impurity_sum(left_sum, root, 0, j, input_indices);
       float right_impurity = get_node_impurity_sum(right_sum, root, j, num_node_inputs,
                                                    input_indices);
@@ -357,14 +360,10 @@ bool MRF::perform_best_split(Node* root) {
         best_split.variable_index = variable_index;
         best_split.split_value = split;
         best_split_score = split_score;
-        left_indices.resize(j);
-        copy(input_indices.begin(), input_indices.begin() + j, left_indices.begin());
-        right_indices.resize(num_node_inputs - j);
-        copy(input_indices.begin() + j, input_indices.end(), right_indices.begin());
       }
     }
   }
-  if (best_split_score == 0) {
+  /*if (best_split_score == 0) {
     // no better split found
     cout << "No better split found" << endl;
     return false;
@@ -378,14 +377,6 @@ bool MRF::perform_best_split(Node* root) {
   root->child2 = new Node;
   split_node(root, best_split.variable_index, best_split.split_value, root->child1,
              root->child2);
-  /*for (int i = 0; i < left_indices.size(); i++) {
-    root->child1->inputs.push_back(root->inputs[left_indices[i]]);
-    root->child1->outputs.push_back(root->outputs[left_indices[i]]);
-  }
-  for (int i = 0; i < right_indices.size(); i++) {
-    root->child2->inputs.push_back(root->inputs[right_indices[i]]);
-    root->child2->outputs.push_back(root->outputs[right_indices[i]]);
-  }*/
   root->split_variable = best_split.variable_index;
   root->split_value = best_split.split_value;
   return true;
