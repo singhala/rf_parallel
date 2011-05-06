@@ -21,7 +21,7 @@
 #include <list>
 #include <string>
 #include <reducer_max.h>
-
+#include <time.h>
 #include "MRF.h"
 
 #define DIVISIONS 5
@@ -786,6 +786,7 @@ int cilk_main(int argc, char** argv) {
   MRF::read_data(actual_file, all_outputs, NULL);
   // all_inputs.resize(1000); all_outputs.resize(1000);
   // num_ensembles, mtry, min_terminal_size
+  srand(time(NULL));
   MRF mrf(&all_inputs,
           &discrete,
           &all_outputs,
