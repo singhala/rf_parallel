@@ -339,8 +339,8 @@ bool MRF::perform_best_split(Node* root) {
       if (j != -1) { // start with empty left child
         do {
           for (int h = 0; h < num_output_vars; h++) {
-            left_sum[h] += pow(root->outputs[input_indices[j]]->at(h), 2);
-            right_sum[h] -= pow(root->outputs[input_indices[j]]->at(h), 2);
+            left_sum[h] += root->outputs[input_indices[j]]->at(h);
+            right_sum[h] -= root->outputs[input_indices[j]]->at(h);
           }
           j++;
           // group together entities with same value to reduce computation
@@ -353,9 +353,17 @@ bool MRF::perform_best_split(Node* root) {
       // float left_impurity = get_node_impurity_sum(left_sum, root, 0, j, input_indices);
       // float right_impurity = get_node_impurity_sum(right_sum, root, j, num_node_inputs,
       //                                             input_indices);
-      float left_impurity = accumulate(left_sum.begin(), left_sum.end(), 0.0f) / left_sum.size();
-      float right_impurity = accumulate(right_sum.begin(), right_sum.end(), 0.0f) / right_sum.size();
-      float split_score = root_impurity - left_impurity - right_impurity;
+      float left_impurity = 0;
+      for (int k = 0; k < left_sum.size(); k++) {
+        left_impurity += pow(left_sum[k], 2);
+      }
+      left_impurity /= left_sum.size();
+      float right_impurity = 0;
+      for (int k = 0; k < right_sum.size(); k++) {
+        right_impurity += pow(right_sum[k], 2);
+      }
+      right_impurity /= right_sum.size();
+      float split_score = left_impurity + right_impurity - root_impurity;
       if (split_score > best_split_score) {
         best_split.variable_index = variable_index;
         best_split.split_value = split;
