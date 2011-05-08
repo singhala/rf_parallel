@@ -363,7 +363,7 @@ bool MRF::perform_best_split(Node* root) {
         right_impurity += pow(right_sum[k], 2);
       }
       right_impurity /= right_sum.size();
-      float split_score = left_impurity + right_impurity - root_impurity;
+      float split_score = root_impurity - left_impurity - right_impurity;
       if (split_score > best_split_score) {
         best_split.variable_index = variable_index;
         best_split.split_value = split;
