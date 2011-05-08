@@ -312,7 +312,7 @@ bool MRF::perform_best_split(Node* root) {
   }
   int num_node_inputs = root->inputs.size();
   // float root_impurity = get_node_impurity(root);
-  float root_impurity = accumulate(overall_sum.begin(), overall_sum.end(), 0.0f) / overall_sum.size();
+  float root_impurity = accumulate(overall_sum.begin(), overall_sum.end(), 0.0f) / num_node_inputs;
   Split best_split = {-1, -1};
   float best_split_score = -1;
   int best_split_j = -1;
