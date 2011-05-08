@@ -21,13 +21,11 @@ struct Node {
   float split_value;
   Node* child1;
   Node* child2;
-  float error;
   int tree_index;
 
   Node() {
     child1 = NULL;
     child2 = NULL;
-    error = -1;
   }
   
   ~Node() {

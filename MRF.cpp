@@ -100,6 +100,8 @@ MRF::MRF(vector<vector<float>* >* inputs,
   cout << "Generated forest" << endl;
   determine_predictions_errors();
   cout << "Determined predictions and errors" << endl;
+  calculate_var_importance();
+  cout << "Determined variable importance" << endl;
 }
 
 MRF::~MRF() {
@@ -185,14 +187,14 @@ void MRF::calculate_var_importance() {
   vector<float> tree_errors;
   calculate_tree_errors(tree_errors);
   vector<float> var_importance;
-
+  
   for (int i = 0; i < num_input_vars; i++) {
     // permute one variable and do the same
     vector<float> var_values;
     for (int j = 0; j < num_inputs; j++) {
       var_values.push_back(all_inputs->at(j)->at(i));
     }
-    vector<float> var_values_permuted = var_values;
+    vector<float> var_values_permuted(var_values);
     random_shuffle(var_values_permuted.begin(), var_values_permuted.end());
     for (int j = 0; j < num_inputs; j++) {
       all_inputs->at(j)->at(i) = var_values_permuted.at(j);
@@ -205,10 +207,14 @@ void MRF::calculate_var_importance() {
     for (int j = 0; j < tree_errors.size(); j++) {
       MSE_differences.push_back(tree_errors_permuted[j] - tree_errors[j]);
     }
-    
     float mean = calculate_mean(MSE_differences);
     float deviation = calculate_standard_deviation(MSE_differences);
-    var_importance.push_back(mean/deviation);
+    float importance = 0 ? deviation == 0 : mean/deviation;
+    var_importance.push_back(importance);
+    // reset this variable
+    for (int j = 0; j < num_inputs; j++) {
+      all_inputs->at(j)->at(i) = var_values.at(j);
+    }
   }
 
   vector<vector<float>* > matrix;
@@ -234,21 +240,19 @@ float MRF::calculate_standard_deviation(vector<float>& values) {
 void MRF::calculate_tree_errors(vector<float>& tree_errors) {
   for (int i = 0; i < roots.size(); i++) {
     Node* root = roots.at(i);
-    if (root->error == -1) {
-      vector<int>* OOB_inputs = OOB_inputs_for_trees.at(i);
-      vector<Node*> this_tree;
-      this_tree.push_back(root);
-      float total_MSE = 0;
-      for (int j = 0; j < OOB_inputs->size(); j++) {
-        int input_index = OOB_inputs->at(j);
-        vector<float>* input = all_inputs->at(input_index);
-        vector<float> predicted_output(num_output_vars, 0);
-        output_estimate(input,  &predicted_output, this_tree);
-        total_MSE += MSE(all_outputs.at(input_index), &predicted_output);
-      }
-      root->error = total_MSE / float(OOB_inputs->size());
-    } 
-    tree_errors.push_back(root->error);
+    vector<int>* OOB_inputs = OOB_inputs_for_trees.at(i);
+    vector<Node*> this_tree;
+    this_tree.push_back(root);
+    float total_MSE = 0;
+    for (int j = 0; j < OOB_inputs->size(); j++) {
+      int input_index = OOB_inputs->at(j);
+      vector<float>* input = all_inputs->at(input_index);
+      vector<float> predicted_output(num_output_vars, 0);
+      output_estimate(input,  &predicted_output, this_tree);
+      total_MSE += MSE(all_outputs.at(input_index), &predicted_output);
+    }
+    float error = total_MSE / float(OOB_inputs->size());
+    tree_errors.push_back(error);
   }
 }
 
@@ -259,6 +263,7 @@ void MRF::create_tree(Node* root) {
     make_leaf(root);
     return;
   }
+  cout << "Splitting node" << endl;
   if (perform_best_split(root)) {
     // better split found
     // create the tree beginning at the children
@@ -303,13 +308,16 @@ bool MRF::perform_best_split(Node* root) {
     for (it = root->outputs.begin(); it != root->outputs.end(); it++) {
       total += (*it)->at(j);
     }
-    overall_sum.push_back(total);
+    overall_sum.push_back(pow(total, 2));
   }
   int num_node_inputs = root->inputs.size();
-  float root_impurity = get_node_impurity(root);
+  // float root_impurity = get_node_impurity(root);
+  float root_impurity = accumulate(overall_sum.begin(), overall_sum.end(), 0.0f) / overall_sum.size();
   Split best_split = {-1, -1};
   float best_split_score = -1;
+  int best_split_j = -1;
   for (int i = 0; i < mtry; i++) {
+    // cout << i << " out of " << mtry << endl;
     // determine values of all entities for this input variable
     int variable_index = subset.at(i);
     vector<int> input_indices;
@@ -331,8 +339,8 @@ bool MRF::perform_best_split(Node* root) {
       if (j != -1) { // start with empty left child
         do {
           for (int h = 0; h < num_output_vars; h++) {
-            left_sum[h] += root->outputs[input_indices[j]]->at(h);
-            right_sum[h] -= root->outputs[input_indices[j]]->at(h);
+            left_sum[h] += pow(root->outputs[input_indices[j]]->at(h), 2);
+            right_sum[h] -= pow(root->outputs[input_indices[j]]->at(h), 2);
           }
           j++;
           // group together entities with same value to reduce computation
@@ -342,23 +350,27 @@ bool MRF::perform_best_split(Node* root) {
         j++;
         split = var_values[0] - 1;
       }
-      float left_impurity = get_node_impurity_sum(left_sum, root, 0, j, input_indices);
-      float right_impurity = get_node_impurity_sum(right_sum, root, j, num_node_inputs,
-                                                   input_indices);
+      // float left_impurity = get_node_impurity_sum(left_sum, root, 0, j, input_indices);
+      // float right_impurity = get_node_impurity_sum(right_sum, root, j, num_node_inputs,
+      //                                             input_indices);
+      float left_impurity = accumulate(left_sum.begin(), left_sum.end(), 0.0f) / left_sum.size();
+      float right_impurity = accumulate(right_sum.begin(), right_sum.end(), 0.0f) / right_sum.size();
       float split_score = root_impurity - left_impurity - right_impurity;
       if (split_score > best_split_score) {
         best_split.variable_index = variable_index;
         best_split.split_value = split;
         best_split_score = split_score;
+        best_split_j = j;
       }
     }
   }
-  // cout << "Best split index: " << best_split.variable_index << endl;
-  // cout << "Best split value: " << best_split.split_value << endl;
-  // cout << "Best split score: " << best_split_score << endl;
-  /*if (best_split_score == 0) {
+  cout << "Best split index: " << best_split.variable_index << endl;
+  cout << "Best split value: " << best_split.split_value << endl;
+  cout << "Best split score: " << best_split_score << endl;
+  cout << "Best split j: " << best_split_j << endl;
+  if (best_split_j <= 0 || best_split_j == num_node_inputs) {
     return false;
-  }*/
+  }
   // record and execute this split
   // put appropriate entities in each child for best split
   root->child1 = new Node;
