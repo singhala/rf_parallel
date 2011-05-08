@@ -357,12 +357,13 @@ bool MRF::perform_best_split(Node* root) {
       for (int k = 0; k < left_sum.size(); k++) {
         left_impurity += pow(left_sum[k], 2);
       }
-      left_impurity /= left_sum.size();
+      left_impurity = (j == 0) ? 0 : (left_impurity / j);
       float right_impurity = 0;
       for (int k = 0; k < right_sum.size(); k++) {
         right_impurity += pow(right_sum[k], 2);
       }
-      right_impurity /= right_sum.size();
+      int right_size = num_node_inputs - j;
+      right_impurity = (right_size == 0) ? 0 : (right_impurity / right_size);
       float split_score = left_impurity + right_impurity - root_impurity;
       if (split_score > best_split_score) {
         best_split.variable_index = variable_index;

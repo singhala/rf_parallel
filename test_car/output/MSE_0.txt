@@ -1,1 +1,1 @@
-nan 24.447533 nan nan 10.830093 10.889995 nan 9.000000 nan 14.371004 nan nan 3.575538 nan nan 25.090986 nan nan nan nan nan nan nan 4.448260 nan nan 0.003086 19.851971 nan 38.993080 nan nan 
+nan 0.000000 nan nan nan nan 1.000000 nan 2.560001 27.039988 43.560005 1.210001 nan 5.290001 nan 0.000000 nan nan nan nan 8.409998 nan nan nan 0.250000 nan nan nan nan nan 22.090008 nan 
