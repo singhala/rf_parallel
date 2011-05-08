@@ -623,9 +623,9 @@ void MRF::write_predictions_errors(const char* filename_predictions,
   for (int i = 0; i < num_inputs; i++) {
     vector<float>* output_unnorm = NULL;
     output_unnorm = new vector<float>(*(predictions[i]));
-    for (int i = 0; i < num_output_vars; i++) {
-      output_unnorm->at(i) = (output_unnorm->at(i) * output_devs[i]) + 
-          output_means[i];
+    for (int j = 0; j < num_output_vars; j++) {
+      output_unnorm->at(j) = (output_unnorm->at(j) * output_devs[j]) + 
+          output_means[j];
     }
     predictions_unnorm.push_back(output_unnorm);
   }
