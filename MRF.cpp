@@ -523,11 +523,9 @@ void MRF::determine_variable_stats(vector<vector<float>* >* matrix,
     }
     // find the mean
     float mean = calculate_mean(values);
-    // means.push_back(mean);
-    means.push_back(0);
+    means.push_back(mean);
     float deviation = calculate_standard_deviation(values);
-    // deviations.push_back(deviation);
-    deviations.push_back(1);
+    deviations.push_back(deviation);
   }
 }
 
@@ -818,7 +816,7 @@ int cilk_main(int argc, char** argv) {
           log_after_every_tree,
           num_trees, 
           0, // defaults to sqrt feature number
-          5);
+          20);
   cout << "Writing predictions, MSEs, trees in " << output_dir << endl;
   string out_str(output_dir);
   string predicted_file = out_str + "predicted.txt";
