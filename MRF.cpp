@@ -273,6 +273,7 @@ void MRF::create_tree(Node* root) {
     create_tree(root->child2);
   } else {
     // no better split found
+    cout << "making leaf" << endl;
     make_leaf(root);
   }
 }
@@ -309,15 +310,21 @@ bool MRF::perform_best_split(Node* root) {
     for (it = root->outputs.begin(); it != root->outputs.end(); it++) {
       total += (*it)->at(j);
     }
-    overall_sum.push_back(pow(total, 2));
+    overall_sum.push_back(total);
   }
   int num_node_inputs = root->inputs.size();
+  float root_impurity = 0;
+  for (int k = 0; k < overall_sum.size(); k++) {
+    root_impurity += pow(overall_sum[k], 2);
+  }
+  root_impurity = root_impurity / num_node_inputs;
   // float root_impurity = get_node_impurity(root);
-  float root_impurity = accumulate(overall_sum.begin(), overall_sum.end(), 0.0f) / num_node_inputs;
   Split best_split = {-1, -1};
   float best_split_score = -1;
   int best_split_j = -1;
+  cout << "Root: " << root_impurity << endl;
   for (int i = 0; i < mtry; i++) {
+    cout << "starting new" << endl;
     // cout << i << " out of " << mtry << endl;
     // determine values of all entities for this input variable
     int variable_index = subset.at(i);
@@ -335,6 +342,7 @@ bool MRF::perform_best_split(Node* root) {
     vector<float> left_sum(num_output_vars, 0);
     vector<float> right_sum(overall_sum);
     int j; // will be first index in right child
+    print_float_vector(var_values);
     for (j = -1; j < num_node_inputs; ) {
       float split; // left is <= split, right is > split
       if (j != -1) { // start with empty left child
@@ -363,9 +371,11 @@ bool MRF::perform_best_split(Node* root) {
       for (int k = 0; k < right_sum.size(); k++) {
         right_impurity += pow(right_sum[k], 2);
       }
-      int right_size = num_node_inputs - j;
+      int right_size = (j == -1) ? num_node_inputs : num_node_inputs - j;
       right_impurity = (right_size == 0) ? 0 : (right_impurity / right_size);
       float split_score = left_impurity + right_impurity - root_impurity;
+      cout << "Left: " << left_impurity << endl;
+      cout << "Right: " << right_impurity << " " << right_size << endl;
       if (split_score > best_split_score) {
         best_split.variable_index = variable_index;
         best_split.split_value = split;
@@ -816,7 +826,7 @@ int cilk_main(int argc, char** argv) {
           log_after_every_tree,
           num_trees, 
           0, // defaults to sqrt feature number
-          20);
+          5);
   cout << "Writing predictions, MSEs, trees in " << output_dir << endl;
   string out_str(output_dir);
   string predicted_file = out_str + "predicted.txt";
