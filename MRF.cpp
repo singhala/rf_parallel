@@ -302,6 +302,7 @@ bool MRF::perform_best_split(Node* root) {
   }
   // determine overall sum of each output variable with entities in node  
   vector<float> overall_sum;
+  vector<float> overall_ss;
   for (int j = 0; j < num_output_vars; j++) {
     float total = 0;
     vector<vector<float>* >::iterator it;
@@ -522,9 +523,11 @@ void MRF::determine_variable_stats(vector<vector<float>* >* matrix,
     }
     // find the mean
     float mean = calculate_mean(values);
-    means.push_back(mean);
+    // means.push_back(mean);
+    means.push_back(0);
     float deviation = calculate_standard_deviation(values);
-    deviations.push_back(deviation);
+    // deviations.push_back(deviation);
+    deviations.push_back(1);
   }
 }
 
