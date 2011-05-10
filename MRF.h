@@ -38,6 +38,7 @@ extern "C++" {
 struct Split {
   int variable_index;
   float split_value;
+  int input_index;
 };
 }
 
@@ -72,8 +73,7 @@ class MRF {
     void create_tree(Node* root);
     void make_leaf(Node* root);
     float get_node_impurity(Node* node);
-    float get_node_impurity_sum(vector<float>& sum, Node* node, int start, int end,
-                                vector<int>& input_indices);
+    float get_node_impurity_sum(vector<float>& sum, int size);
     void split_node(Node* node, int var_index, float var_value, Node* child1,
                     Node* child2);
     void generate_tree();
