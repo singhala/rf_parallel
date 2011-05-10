@@ -46,7 +46,7 @@ MRF::MRF(vector<vector<float>* >* inputs,
   this->log_after = log;
 
   if (mtry == 0) { // if mtry not specified
-    this->mtry = sqrt(num_input_vars);
+    this->mtry = static_cast<int>(sqrt(num_input_vars));
   } else {
     this->mtry = mtry;
   }
