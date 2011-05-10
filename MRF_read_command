@@ -1,0 +1,1 @@
+./MRF_single --output_dir test_car/output_read/ --input_file test_car/cars_input.txt --actual_file test_car/cars_output.txt --read_file test_car/output/trees.txt --log_after_every_tree --num_trees 10

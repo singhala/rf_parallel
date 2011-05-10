@@ -1,0 +1,1 @@
+./MRF_single --output_dir beer/output_test/ --input_file beer/motifs_beer.txt --actual_file beer/expr_beer.txt --num_trees 5 --terminal_node_size 20
