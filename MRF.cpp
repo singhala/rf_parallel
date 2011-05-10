@@ -365,10 +365,10 @@ bool MRF::perform_best_split(Node* root) {
   }
   float best_split_score = max_split.get_value();
   Split best_split = max_split.get_index();
-  cout << "Best split index: " << best_split.variable_index << endl;
-  cout << "Best split value: " << best_split.split_value << endl;
-  cout << "Best split score: " << best_split_score << endl;
-  cout << "Best split j: " << best_split.input_index << endl;
+  // cout << "Best split index: " << best_split.variable_index << endl;
+  // cout << "Best split value: " << best_split.split_value << endl;
+  // cout << "Best split score: " << best_split_score << endl;
+  // cout << "Best split j: " << best_split.input_index << endl;
   if (best_split.input_index <= 0 || best_split.input_index == num_node_inputs) {
     return false;
   }
@@ -795,7 +795,7 @@ int cilk_main(int argc, char** argv) {
           log_after_every_tree,
           num_trees, 
           0, // defaults to sqrt feature number
-          5);
+          20);
   cout << "Writing predictions, MSEs, trees in " << output_dir << endl;
   string out_str(output_dir);
   string predicted_file = out_str + "predicted.txt";
