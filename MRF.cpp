@@ -129,7 +129,7 @@ MRF::~MRF() {
   }
   vector<vector<Node*>* >::iterator it4;
   for (it4 = OOB_trees_for_inputs.begin(); it4 != OOB_trees_for_inputs.end(); it4++) {
-    delete *it3;
+    delete *it4;
   }
 }
 
