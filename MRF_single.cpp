@@ -574,6 +574,7 @@ void MRF::print_trees_new(const char* filename) {
       }
     }
     file << endl;
+    print_node_new(file, roots[i]);
     file << endl;
   }
 }
