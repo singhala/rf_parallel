@@ -110,6 +110,7 @@ class MRF {
         char* output_dir,
         char* read_file,
         bool log,
+        bool permute,
         int num_ensembles,
         int mtry,
         int min_terminal_size);

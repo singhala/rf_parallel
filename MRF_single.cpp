@@ -31,6 +31,7 @@ MRF::MRF(vector<vector<float>* >* inputs,
          char* output_dir,
          char* read_file,
          bool log=false,
+         bool permute=false,
          int num_ensembles=1000,
          int mtry=0,
          int min_terminal_size=5) {
@@ -44,6 +45,10 @@ MRF::MRF(vector<vector<float>* >* inputs,
   this->num_output_vars = all_outputs_unnorm->at(0)->size();
   this->output_dir = output_dir;
   this->log_after = log;
+  
+  if (permute) {
+    random_shuffle(outputs->begin(), outputs->end());
+  }
 
   if (mtry == 0) { // if mtry not specified
     this->mtry = static_cast<int>(sqrt(num_input_vars));
@@ -896,6 +901,7 @@ int main(int argc, char** argv) {
   const char* actual_file;
   char* read_file = NULL;
   bool log_after_every_tree = false;
+  bool permute = false;
   int num_trees = 1000;
   int terminal_node_size = 20;
   for (int i = 1; i < argc; i++) {
@@ -924,6 +930,8 @@ int main(int argc, char** argv) {
       i++;
     } else if (strcmp(argv[i], "--log_after_every_tree") == 0) {
       log_after_every_tree = true;
+    } else if (strcmp(argv[i], "--permute") == 0) {
+      permute = true;
     } else {
       cout << "Invalid arguments\n" << endl;
     }
@@ -944,6 +952,7 @@ int main(int argc, char** argv) {
           output_dir,
           read_file,
           log_after_every_tree,
+          permute,
           num_trees, 
           0, // defaults to sqrt feature number
           terminal_node_size);
@@ -958,7 +967,8 @@ int main(int argc, char** argv) {
                                  MSE_file.c_str(),
                                  predicted_norm_file.c_str(),
                                  MSE_norm_file.c_str());
+  } else {
+    string trees_file = out_str + "trees.txt";
+    mrf.print_trees_new(trees_file.c_str());
   }
-  string trees_file = out_str + "trees.txt";
-  mrf.print_trees_new(trees_file.c_str());
 }
