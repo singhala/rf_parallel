@@ -47,6 +47,7 @@ MRF::MRF(vector<vector<float>* >* inputs,
   this->log_after = log;
   
   if (permute) {
+    cout << "Permuting" << endl;
     random_shuffle(outputs->begin(), outputs->end());
   }
 

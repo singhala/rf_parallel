@@ -1,1 +1,1 @@
-./MRF_single --output_dir test_car/output_perm/ --input_file test_car/cars_input.txt --actual_file test_car/cars_output.txt --num_trees 250 --terminal_node_size 5 --log_after_every_tree --permuted
+./MRF_single --output_dir test_car/output_perm/ --input_file test_car/cars_input.txt --actual_file test_car/cars_output.txt --num_trees 250 --terminal_node_size 5 --log_after_every_tree --permute
