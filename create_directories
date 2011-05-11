@@ -1,0 +1,9 @@
+#!/bin/bash
+
+for i in {1..100}
+do
+  echo $i
+  mkdir "run_permuted/perm_${i}"
+  shuf beer/expr_beer.txt > "run_permuted/perm_${i}/expr_beer.txt"
+  cp beer/motifs_beer.txt "run_permuted/perm_${i}/motifs_beer.txt"
+done

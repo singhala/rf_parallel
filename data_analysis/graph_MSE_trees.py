@@ -3,7 +3,7 @@ import numpy
 import pylab
 
 trees = 250
-directory = '../test_car/output/'
+directory = '../binding/output/'
 
 err_strings = [open(directory + 'MSE_%d.txt' % i).readline().split() \
                for i in xrange(trees)]
