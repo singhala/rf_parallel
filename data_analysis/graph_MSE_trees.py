@@ -2,8 +2,8 @@
 import numpy
 import pylab
 
-trees = 1000
-directory = '/home/singhala/rf_parallel/test_car/output/'
+trees = 250
+directory = '../test_car/output/'
 
 err_strings = [open(directory + 'MSE_%d.txt' % i).readline().split() \
                for i in xrange(trees)]
