@@ -208,6 +208,7 @@ void MRF::calculate_var_importance() {
   
   for (int i = 0; i < num_input_vars; i++) {
     // permute one variable and do the same
+    cout << "Permuting variable " << i << endl;
     vector<float> var_values;
     for (int j = 0; j < num_inputs; j++) {
       var_values.push_back(all_inputs->at(j)->at(i));
@@ -776,7 +777,7 @@ void MRF::read_trees(const char* filename) {
       root->tree_index = roots.size();
       roots.push_back(root);
       if (log_after) {
-        log_tree(root->tree_index);
+        // log_tree(root->tree_index);
       }
       getline(file, line);
     }
